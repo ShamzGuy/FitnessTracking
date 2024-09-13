@@ -37,75 +37,7 @@ df_melted['Value'] = pd.to_numeric(df_melted['Value'], errors='coerce')
 df_melted['Target_numeric'] = df_melted['Target'].str.extract('(\d+\.?\d*)', expand=False)
 df_melted['Target_numeric'] = pd.to_numeric(df_melted['Target_numeric'], errors='coerce')
 
-# Sidebar for user selection
-st.sidebar.title("Filter Options")
-selected_name = st.sidebar.selectbox("Select Individual", df['Name'].unique())
-selected_goal = st.sidebar.selectbox("Select Goal", df[df['Name'] == selected_name]['Goal'].unique())
-
-# Filter data based on selection
-filtered_data = df_melted[(df_melted['Name'] == selected_name) & (df_melted['Goal'] == selected_goal)]
-
-# Display individual's progress
-st.header(f"{selected_name} - {selected_goal}")
-
-if not filtered_data.empty and filtered_data['Value'].notnull().any():
-    # Prepare data for plotting
-    plot_data = filtered_data[['Date', 'Value']].set_index('Date')
-    # Add target value as a horizontal line
-    target_value = filtered_data['Target_numeric'].iloc[0]
-    plot_data['Target'] = target_value
-
-    # Plotting using Altair for better customization
-    # Reset index to have 'Date' as a column
-    plot_data = plot_data.reset_index()
-
-    # Create the chart with custom colors and improved aesthetics
-    # Define color scheme
-    line_chart = alt.Chart(plot_data).transform_fold(
-        ['Value', 'Target'],
-        as_=['Measurement', 'Value']
-    ).mark_line().encode(
-        x=alt.X('Date:T', axis=alt.Axis(title='Date', grid=False)),
-        y=alt.Y('Value:Q', axis=alt.Axis(title='Measurement Value', grid=False)),
-        color=alt.Color('Measurement:N', scale=alt.Scale(
-            domain=['Value', 'Target'],
-            range=['#1f77b4', 'green']  # Blue for Value, Green for Target
-        )),
-        strokeDash=alt.condition(
-            alt.datum.Measurement == 'Target',
-            alt.value([5, 5]),
-            alt.value([0])
-        ),
-        tooltip=[alt.Tooltip('Date:T', title='Date'),
-                 alt.Tooltip('Measurement:N', title='Type'),
-                 alt.Tooltip('Value:Q', title='Value')]
-    ).properties(
-        title=f"{selected_name}'s Progress on {selected_goal}",
-        width=700,
-        height=400
-    ).configure_title(
-        fontSize=20,
-        anchor='start',
-        color='gray'
-    ).configure_axis(
-        labelFontSize=12,
-        titleFontSize=14
-    ).interactive()
-
-    st.altair_chart(line_chart, use_container_width=True)
-
-    # Display current status
-    latest_value = filtered_data.dropna(subset=['Value']).iloc[-1]['Value']
-    st.write(f"**Latest Value:** {latest_value}")
-    st.write(f"**Target Value:** {filtered_data['Target'].iloc[0]}")
-else:
-    st.write("No data available for this selection.")
-
-# Leaderboard Section
-st.header("Leaderboard")
-
 # Assign points for each activity
-# Define a function to calculate points
 def calculate_points(row):
     # Base points for participation per week
     participation_points = 1 if not pd.isnull(row['Value']) else 0
@@ -136,33 +68,108 @@ df_melted['Points'] = df_melted.apply(calculate_points, axis=1)
 leaderboard = df_melted.groupby('Name')['Points'].sum().reset_index()
 leaderboard = leaderboard.sort_values(by='Points', ascending=False)
 
-# Display the leaderboard with a bar chart
-st.subheader("Points Leaderboard")
+# Sidebar for user selection
+st.sidebar.title("Filter Options")
 
-# Create a bar chart for the leaderboard
-leaderboard_chart = alt.Chart(leaderboard).mark_bar().encode(
-    x=alt.X('Points:Q', title='Total Points'),
-    y=alt.Y('Name:N', sort='-x', title='Participant'),
-    color=alt.Color('Name:N', legend=None),
-    tooltip=[alt.Tooltip('Name:N', title='Participant'),
-             alt.Tooltip('Points:Q', title='Total Points', format='.1f')]
-).properties(
-    width=700,
-    height=400
-).configure_axis(
-    labelFontSize=12,
-    titleFontSize=14
-).configure_title(
-    fontSize=20,
-    anchor='start',
-    color='gray'
-).configure_view(
-    strokeWidth=0
-)
+# Add an option to select 'View Leaderboard' or 'View Individual Progress'
+view_option = st.sidebar.radio("Select View", ('Leaderboard', 'Individual Progress'))
 
-st.altair_chart(leaderboard_chart, use_container_width=True)
+if view_option == 'Leaderboard':
+    # Display the leaderboard at the top
+    st.header("Leaderboard")
+    st.subheader("Points Leaderboard")
+
+    # Create a bar chart for the leaderboard
+    leaderboard_chart = alt.Chart(leaderboard).mark_bar().encode(
+        x=alt.X('Points:Q', title='Total Points'),
+        y=alt.Y('Name:N', sort='-x', title='Participant'),
+        color=alt.Color('Name:N', legend=None),
+        tooltip=[alt.Tooltip('Name:N', title='Participant'),
+                 alt.Tooltip('Points:Q', title='Total Points', format='.1f')]
+    ).properties(
+        width=700,
+        height=400
+    ).configure_axis(
+        labelFontSize=12,
+        titleFontSize=14
+    ).configure_title(
+        fontSize=20,
+        anchor='start',
+        color='gray'
+    ).configure_view(
+        strokeWidth=0
+    )
+
+    st.altair_chart(leaderboard_chart, use_container_width=True)
+
+else:
+    # When 'Individual Progress' is selected
+    selected_name = st.sidebar.selectbox("Select Individual", df['Name'].unique())
+    selected_goal = st.sidebar.selectbox("Select Goal", df[df['Name'] == selected_name]['Goal'].unique())
+
+    # Filter data based on selection
+    filtered_data = df_melted[(df_melted['Name'] == selected_name) & (df_melted['Goal'] == selected_goal)]
+
+    # Display individual's progress
+    st.header(f"{selected_name} - {selected_goal}")
+
+    if not filtered_data.empty and filtered_data['Value'].notnull().any():
+        # Prepare data for plotting
+        plot_data = filtered_data[['Date', 'Value']].set_index('Date')
+        # Add target value as a horizontal line
+        target_value = filtered_data['Target_numeric'].iloc[0]
+        plot_data['Target'] = target_value
+
+        # Plotting using Altair for better customization
+        # Reset index to have 'Date' as a column
+        plot_data = plot_data.reset_index()
+
+        # Create the chart with custom colors and improved aesthetics
+        # Define color scheme
+        line_chart = alt.Chart(plot_data).transform_fold(
+            ['Value', 'Target'],
+            as_=['Measurement', 'Value']
+        ).mark_line().encode(
+            x=alt.X('Date:T', axis=alt.Axis(title='Date', grid=False)),
+            y=alt.Y('Value:Q', axis=alt.Axis(title='Measurement Value', grid=False)),
+            color=alt.Color('Measurement:N', scale=alt.Scale(
+                domain=['Value', 'Target'],
+                range=['#1f77b4', 'green']  # Blue for Value, Green for Target
+            )),
+            strokeDash=alt.condition(
+                alt.datum.Measurement == 'Target',
+                alt.value([5, 5]),
+                alt.value([0])
+            ),
+            tooltip=[alt.Tooltip('Date:T', title='Date'),
+                     alt.Tooltip('Measurement:N', title='Type'),
+                     alt.Tooltip('Value:Q', title='Value')]
+        ).properties(
+            title=f"{selected_name}'s Progress on {selected_goal}",
+            width=700,
+            height=400
+        ).configure_title(
+            fontSize=20,
+            anchor='start',
+            color='gray'
+        ).configure_axis(
+            labelFontSize=12,
+            titleFontSize=14
+        ).interactive()
+
+        st.altair_chart(line_chart, use_container_width=True)
+
+        # Display current status
+        latest_value = filtered_data.dropna(subset=['Value']).iloc[-1]['Value']
+        st.write(f"**Latest Value:** {latest_value}")
+        st.write(f"**Target Value:** {filtered_data['Target'].iloc[0]}")
+    else:
+        st.write("No data available for this selection.")
 
 # Optionally, display the raw data
 if st.sidebar.checkbox("Show Raw Data"):
     st.subheader("Raw Data")
-    st.write(df_melted)
+    if view_option == 'Leaderboard':
+        st.write(df_melted)
+    else:
+        st.write(filtered_data)
