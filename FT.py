@@ -3,21 +3,35 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-# Hide Streamlit style elements for a cleaner look
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# Set page configuration for better mobile experience
+st.set_page_config(
+    page_title="Fitness Progress Dashboard",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Custom CSS to adjust layout for mobile devices
+st.markdown("""
+    <style>
+        /* Hide the default Streamlit header and footer */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+
+        /* Adjust the padding of the main block */
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Title of the dashboard
 st.title("Fitness Progress Dashboard")
 
 # URL of your Google Sheet CSV export
 sheet_id = "193xV6td88gsuLRdoSipsvwjP4zQCntoqWsjTQbjaLjs"
-sheet_name = "Sheet1"  # Replace with the actual name of your sheet if different
 url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=0"
 
 # Read the data into a pandas DataFrame
@@ -69,10 +83,12 @@ leaderboard = df_melted.groupby('Name')['Points'].sum().reset_index()
 leaderboard = leaderboard.sort_values(by='Points', ascending=False)
 
 # Sidebar for user selection
-st.sidebar.title("Filter Options")
-
-# Add an option to select 'View Leaderboard' or 'View Individual Progress'
-view_option = st.sidebar.radio("Select View", ('Leaderboard', 'Individual Progress'))
+with st.sidebar:
+    st.title("Filter Options")
+    # Add an option to select 'View Leaderboard' or 'View Individual Progress'
+    view_option = st.radio("Select View", ('Leaderboard', 'Individual Progress'))
+    # Optionally, display the raw data
+    show_data = st.checkbox("Show Raw Data")
 
 if view_option == 'Leaderboard':
     # Display the leaderboard at the top
@@ -87,13 +103,12 @@ if view_option == 'Leaderboard':
         tooltip=[alt.Tooltip('Name:N', title='Participant'),
                  alt.Tooltip('Points:Q', title='Total Points', format='.1f')]
     ).properties(
-        width=700,
         height=400
     ).configure_axis(
         labelFontSize=12,
         titleFontSize=14
     ).configure_title(
-        fontSize=20,
+        fontSize=18,
         anchor='start',
         color='gray'
     ).configure_view(
@@ -102,10 +117,14 @@ if view_option == 'Leaderboard':
 
     st.altair_chart(leaderboard_chart, use_container_width=True)
 
+    if show_data:
+        st.subheader("Raw Data")
+        st.write(df_melted)
+
 else:
     # When 'Individual Progress' is selected
-    selected_name = st.sidebar.selectbox("Select Individual", df['Name'].unique())
-    selected_goal = st.sidebar.selectbox("Select Goal", df[df['Name'] == selected_name]['Goal'].unique())
+    selected_name = st.selectbox("Select Individual", df['Name'].unique())
+    selected_goal = st.selectbox("Select Goal", df[df['Name'] == selected_name]['Goal'].unique())
 
     # Filter data based on selection
     filtered_data = df_melted[(df_melted['Name'] == selected_name) & (df_melted['Goal'] == selected_goal)]
@@ -120,22 +139,20 @@ else:
         target_value = filtered_data['Target_numeric'].iloc[0]
         plot_data['Target'] = target_value
 
-        # Plotting using Altair for better customization
         # Reset index to have 'Date' as a column
         plot_data = plot_data.reset_index()
 
         # Create the chart with custom colors and improved aesthetics
-        # Define color scheme
         line_chart = alt.Chart(plot_data).transform_fold(
             ['Value', 'Target'],
             as_=['Measurement', 'Value']
-        ).mark_line().encode(
-            x=alt.X('Date:T', axis=alt.Axis(title='Date', grid=False)),
+        ).mark_line(point=True).encode(
+            x=alt.X('Date:T', axis=alt.Axis(title='Date', grid=False, labelAngle=-45)),
             y=alt.Y('Value:Q', axis=alt.Axis(title='Measurement Value', grid=False)),
             color=alt.Color('Measurement:N', scale=alt.Scale(
                 domain=['Value', 'Target'],
                 range=['#1f77b4', 'green']  # Blue for Value, Green for Target
-            )),
+            ), legend=alt.Legend(title="Legend")),
             strokeDash=alt.condition(
                 alt.datum.Measurement == 'Target',
                 alt.value([5, 5]),
@@ -145,31 +162,27 @@ else:
                      alt.Tooltip('Measurement:N', title='Type'),
                      alt.Tooltip('Value:Q', title='Value')]
         ).properties(
-            title=f"{selected_name}'s Progress on {selected_goal}",
-            width=700,
             height=400
-        ).configure_title(
-            fontSize=20,
-            anchor='start',
-            color='gray'
         ).configure_axis(
             labelFontSize=12,
             titleFontSize=14
+        ).configure_title(
+            fontSize=18,
+            anchor='start',
+            color='gray'
+        ).configure_legend(
+            orient='bottom'
         ).interactive()
 
         st.altair_chart(line_chart, use_container_width=True)
 
         # Display current status
         latest_value = filtered_data.dropna(subset=['Value']).iloc[-1]['Value']
-        st.write(f"**Latest Value:** {latest_value}")
-        st.write(f"**Target Value:** {filtered_data['Target'].iloc[0]}")
+        st.markdown(f"**Latest Value:** {latest_value}")
+        st.markdown(f"**Target Value:** {filtered_data['Target'].iloc[0]}")
+
+        if show_data:
+            st.subheader("Raw Data")
+            st.write(filtered_data)
     else:
         st.write("No data available for this selection.")
-
-# Optionally, display the raw data
-if st.sidebar.checkbox("Show Raw Data"):
-    st.subheader("Raw Data")
-    if view_option == 'Leaderboard':
-        st.write(df_melted)
-    else:
-        st.write(filtered_data)
